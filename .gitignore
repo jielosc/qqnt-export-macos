@@ -1,0 +1,24 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+dist/
+build/
+*.egg-info/
+
+# Never commit QQ data or secrets.
+work/
+snapshot*/
+backup*/
+plaintext*/
+output*/
+keys/
+*.key
+*.db
+*.db-*
+*.sqlite*
+*.app/
+*.html
+*.jsonl

@@ -1,0 +1,252 @@
+diff --git a/exporters/html.py b/exporters/html.py
+index 91011b3..9b9c802 100644
+--- a/exporters/html.py
++++ b/exporters/html.py
+@@ -27,6 +27,13 @@ from .element_layout import element_layout
+ logger = logging.getLogger(__name__)
+ 
+ 
++def _safe_datetime(value: Any) -> datetime | None:
++    try:
++        return datetime.fromtimestamp(value) if value is not None else None
++    except (OSError, OverflowError, TypeError, ValueError):
++        return None
++
++
+ class HTMLExporter(BaseExporter):
+     """HTML 格式导出器（单文件，所有资源内联或相对路径）"""
+ 
+@@ -37,6 +44,9 @@ class HTMLExporter(BaseExporter):
+ 
+     def __init__(self, output_path: Path, config: dict[str, Any]):
+         super().__init__(output_path, config)
++        self._offline = bool(config.get('offline', False))
++        if self._offline:
++            type(self)._emoji_download_disabled = True
+         self._image_resource_map: dict[tuple[str, str], str] = {}
+         self._system_emoji_resource_map: dict[str, list[str]] = {}
+         self._voice_resource_map: dict[str, str] = {}
+@@ -180,7 +190,8 @@ class HTMLExporter(BaseExporter):
+             raise RuntimeError('HTML stream is not open')
+         output = state['output']
+         self._prepare_message_resources(message)
+-        date_str = datetime.fromtimestamp(message.timestamp).strftime('%Y-%m-%d')
++        moment = _safe_datetime(message.timestamp)
++        date_str = moment.strftime('%Y-%m-%d') if moment else '未知日期'
+         date_id = date_str.replace(' ', '-').replace('/', '-')
+         if date_str != state['current_date']:
+             if state['current_date'] is not None:
+@@ -607,7 +618,10 @@ class HTMLExporter(BaseExporter):
+         content: dict,
+         pic_path: Path | None,
+     ) -> list[tuple[str, str, Path | str | None]]:
+-        from parser.elements import compute_image_cache_paths
++        from parser.elements import (
++            compute_image_cache_path,
++            compute_image_cache_paths,
++        )
+ 
+         md5 = content.get('md5')
+         original = bool(content.get('original', 0))
+@@ -619,6 +633,9 @@ class HTMLExporter(BaseExporter):
+                 if original else ('raw', 'hd', 'thumb')
+             )
+             local_paths = dict(zip(kinds, candidates))
++            macos_fallback = compute_image_cache_path(md5, int(original), pic_path)
++            if macos_fallback and not any(path.is_file() for path in local_paths.values()):
++                local_paths['raw'] = macos_fallback
+ 
+         host = content.get('cdn_host')
+         steps: list[tuple[str, str, Path | str | None]] = [
+@@ -639,6 +656,8 @@ class HTMLExporter(BaseExporter):
+             )),
+             ('local', 'thumb', local_paths.get('thumb')),
+         ))
++        if self._offline:
++            steps = [step for step in steps if step[0] == 'local']
+         return steps
+ 
+     def _relative_image_source(self, source: Path) -> str | None:
+@@ -708,7 +727,7 @@ class HTMLExporter(BaseExporter):
+                     continue
+                 except OSError:
+                     pass
+-            if member.avatar:
++            if member.avatar and not self._offline:
+                 avatar_map[member.platform_id] = member.avatar
+ 
+         return avatar_map
+@@ -723,7 +742,8 @@ class HTMLExporter(BaseExporter):
+         groups = defaultdict(list)
+ 
+         for msg in messages:
+-            date_str = datetime.fromtimestamp(msg.timestamp).strftime('%Y-%m-%d')
++            moment = _safe_datetime(msg.timestamp)
++            date_str = moment.strftime('%Y-%m-%d') if moment else '未知日期'
+             groups[date_str].append(msg)
+ 
+         # 按日期排序
+@@ -848,9 +868,12 @@ class HTMLExporter(BaseExporter):
+         if msg.elements and msg.elements[0].type == ElementType.NOTICE:
+             notice_text = self._format_notice_text(msg.elements[0].content, member_map)
+             search_text = html.escape(notice_text.lower(), quote=True)
+-            full_time = datetime.fromtimestamp(msg.timestamp).strftime(
+-                '%Y-%m-%d %H:%M:%S'
++            moment = _safe_datetime(msg.timestamp)
++            full_time = (
++                moment.strftime('%Y-%m-%d %H:%M:%S')
++                if moment else '未知时间'
+             )
++            time_str = moment.strftime('%H:%M') if moment else '--:--'
+             return (
+                 f'<div class="message-entry system-message" '
+                 f'id="msg-{html.escape(msg.msg_id)}" '
+@@ -858,15 +881,15 @@ class HTMLExporter(BaseExporter):
+                 f'data-message-timestamp="{msg.timestamp}" '
+                 f'data-search="{search_text}" data-sender="">'
+                 f'<span class="system-text">{html.escape(notice_text)}</span>'
+-                f'<time title="{full_time}">'
+-                f'{datetime.fromtimestamp(msg.timestamp).strftime("%H:%M")}'
+-                f'</time></div>'
++                f'<time title="{full_time}">{time_str}</time></div>'
+             )
+ 
+         # 格式化时间
+-        time_str = datetime.fromtimestamp(msg.timestamp).strftime('%H:%M')
+-        full_time = datetime.fromtimestamp(msg.timestamp).strftime(
+-            '%Y-%m-%d %H:%M:%S'
++        moment = _safe_datetime(msg.timestamp)
++        time_str = moment.strftime('%H:%M') if moment else '--:--'
++        full_time = (
++            moment.strftime('%Y-%m-%d %H:%M:%S')
++            if moment else '未知时间'
+         )
+ 
+         # 头像（优先使用图片 URL，回退到首字母）
+@@ -1341,13 +1364,12 @@ class HTMLExporter(BaseExporter):
+             '</span>'
+         )
+ 
+-    @staticmethod
+-    def _render_application_card(content: dict) -> str:
++    def _render_application_card(self, content: dict) -> str:
+         kind = content.get('card_kind') or 'share'
+         title = html.escape(content.get('title') or content.get('prompt') or '应用消息')
+         description = html.escape(content.get('description') or '')
+         footer = html.escape(content.get('footer') or '')
+-        image_url = content.get('image_url') or ''
++        image_url = '' if self._offline else (content.get('image_url') or '')
+         target_url = content.get('target_url') or ''
+ 
+         labels = {
+@@ -1375,14 +1397,19 @@ class HTMLExporter(BaseExporter):
+             return f'<a class="ark-card ark-{kind}" href="{safe_url}" target="_blank" rel="noreferrer">{body}</a>'
+         return f'<div class="ark-card ark-{kind}">{body}</div>'
+ 
+-    @classmethod
+-    def _render_feed_card(cls, content: dict) -> str:
++    def _render_feed_card(self, content: dict) -> str:
+         """渲染动态消息卡片中的文字、封面和来源 Logo。"""
+         title = content.get('title') or ''
+         description = content.get('content') or ''
+         subtitle = content.get('subtitle') or ''
+-        cover_url = cls._resolve_image_url(content.get('cover_url'), None)
+-        logo_url = cls._resolve_image_url(content.get('logo_url'), None)
++        cover_url = (
++            None if self._offline
++            else self._resolve_image_url(content.get('cover_url'), None)
++        )
++        logo_url = (
++            None if self._offline
++            else self._resolve_image_url(content.get('logo_url'), None)
++        )
+ 
+         cover = ''
+         if cover_url:
+@@ -1518,15 +1545,17 @@ class HTMLExporter(BaseExporter):
+                 content = self._render_quote_preview(fwd_msg.elements)
+             if not content:
+                 content = '<span class="placeholder-card">[消息]</span>'
+-            timestamp = datetime.fromtimestamp(fwd_msg.timestamp).strftime(
+-                '%Y-%m-%d %H:%M:%S'
++            moment = _safe_datetime(fwd_msg.timestamp)
++            timestamp = (
++                moment.strftime('%Y-%m-%d %H:%M:%S')
++                if moment else '未知时间'
+             )
+ 
+             items.append(f'''
+ <div class="forward-item">
+     <div class="forward-meta">
+         <span class="forward-sender">{html.escape(sender_name)}</span>
+-        <time title="{html.escape(timestamp, quote=True)}">{timestamp[11:16]}</time>
++        <time title="{html.escape(timestamp, quote=True)}">{timestamp[11:16] if moment else '--:--'}</time>
+     </div>
+     <div class="forward-content">{content}</div>
+ </div>
+diff --git a/parser/avatar.py b/parser/avatar.py
+index 3771ee2..be40edc 100644
+--- a/parser/avatar.py
++++ b/parser/avatar.py
+@@ -80,9 +80,12 @@ def find_local_avatar(
+     image_hash = avatar_hash_for_uid(identity)
+     bucket = image_hash[:2]
+     for prefix in ('b_', 's_'):
+-        candidate = root / scope / bucket / f'{prefix}{image_hash}'
+-        if candidate.is_file():
+-            return candidate
++        for candidate in (
++            root / scope / bucket / f'{prefix}{image_hash}',
++            root / scope / f'{prefix}{image_hash}',
++        ):
++            if candidate.is_file():
++                return candidate
+     return None
+ 
+ 
+diff --git a/parser/elements.py b/parser/elements.py
+index 7d760e7..35096c3 100644
+--- a/parser/elements.py
++++ b/parser/elements.py
+@@ -844,4 +844,41 @@ def compute_image_cache_path(
+         if path.is_file():
+             return path
+ 
++    # macOS QQ stores pictures as Pic/YYYY-MM/{Ori,Thumb}/<md5>*.ext
++    # instead of the Windows chatraw/chatimg/chatthumb cache layout.
++    if pic_path:
++        matches = _macos_image_index(str(pic_path.resolve())).get(md5.lower())
++        if matches:
++            return matches[0]
++
+     return None
++
++
++@lru_cache(maxsize=4)
++def _macos_image_index(pic_path: str) -> dict[str, tuple[Path, ...]]:
++    root = Path(pic_path)
++    indexed: dict[str, list[Path]] = {}
++    try:
++        paths = root.rglob('*')
++        for path in paths:
++            if not path.is_file():
++                continue
++            prefix = path.name[:32].lower()
++            if len(prefix) == 32 and all(char in '0123456789abcdef' for char in prefix):
++                indexed.setdefault(prefix, []).append(path)
++    except OSError:
++        return {}
++
++    def preference(path: Path) -> tuple[int, int, str]:
++        parts = set(path.parts)
++        kind = 0 if 'Ori' in parts else 1 if 'Thumb' in parts else 2
++        try:
++            size = -path.stat().st_size
++        except OSError:
++            size = 0
++        return kind, size, str(path)
++
++    return {
++        digest: tuple(sorted(matches, key=preference))
++        for digest, matches in indexed.items()
++    }

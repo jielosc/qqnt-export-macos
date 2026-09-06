@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qqnt-export-macos"
+version = "0.1.0"
+description = "Local-first QQNT chat export toolkit for Apple Silicon macOS without disabling SIP"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-only" }
+authors = [{ name = "Ryan Liu" }]
+keywords = ["qq", "qqnt", "macos", "chat-export", "sqlcipher"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: MacOS X",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Communications :: Chat",
+]
+dependencies = []
+
+[project.optional-dependencies]
+decrypt = ["sqlcipher3>=0.5"]
+test = ["pytest>=8"]
+
+[project.urls]
+Repository = "https://github.com/jielosc/qqnt-export-macos"
+Issues = "https://github.com/jielosc/qqnt-export-macos/issues"
+
+[project.scripts]
+qqnt-export-macos = "qqnt_export_macos.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+qqnt_export_macos = ["qqnt-export.patch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
