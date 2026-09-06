@@ -1,6 +1,6 @@
 # qqnt-export-macos
 
-在 Apple Silicon macOS 上，以本地优先方式导出自己账号的 QQNT 聊天记录：
+在 Apple Silicon macOS 上，以本地优先方式导出自己账号的 QQNT 聊天记录，或让外部 Agent 按需读取最近消息：
 
 - 不关闭 SIP
 - 不安装 NapCat、LiteLoader 等 QQ 插件
@@ -10,6 +10,8 @@
 - 输出 HTML、ChatLab JSON 和 JSONL
 - 可复制 macOS QQ 的本地图片、头像、表情及语音缓存
 - 离线模式不会自动下载缺失的 QQ CDN 资源
+- 提供只读、本机 `stdio` MCP 接口，不开放网络端口
+- 运行 QQ 时可从数据库与 WAL 建立数秒级的最新消息镜像
 
 > [!WARNING]
 > 仅处理你有权访问的账号与数据。数据库密钥、明文数据库和导出结果都是敏感信息；不要上传、提交或发送给第三方。本项目与腾讯无关，QQ 更新后流程可能失效。
@@ -28,7 +30,8 @@
 
 ```text
 官方 QQ（只读来源）
-  ├─ 完全退出后复制数据 ──> 私有 snapshot
+  ├─ 完全退出后复制数据 ──> 私有 snapshot ──> HTML / JSON / JSONL
+  ├─ 运行时 DB + WAL ─────> 私有热镜像 ─────> 本机 MCP ──> Agent
   └─ 复制 App ───────────> 临时 ad-hoc QQ 副本
                                 │
 snapshot + 临时副本 ── LLDB ───> 私有 key candidates
@@ -50,11 +53,49 @@ brew install python sqlcipher
 git clone https://github.com/jielosc/qqnt-export-macos.git
 cd qqnt-export-macos
 python3 -m venv .venv
-.venv/bin/pip install -e '.[decrypt]'
+.venv/bin/pip install -e '.[bridge]'
 .venv/bin/qqnt-export-macos doctor
 ```
 
 `doctor` 应显示 macOS、Apple Silicon、SIP、LLDB、codesign 和 git 均为 `ok`。QQ 完整签名若为 `WARN`，先从腾讯官方渠道重装 QQ，再继续。
+
+## Agent 最近消息桥接
+
+取得数据库 key 后，不必为每次查询重复注入 QQ。桥接器会在每次 Agent 调用时复制一个一致的主库/WAL 视图，并以只读方式查询最近消息；首次刷新通常需要复制主库，之后一般只更新很小的 WAL。它不会向 QQ 发送、删除或修改任何内容。
+
+先从候选目录中验证并单独保存唯一可用的 key：
+
+```bash
+.venv/bin/qqnt-export-macos install-bridge-key \
+  work/keys "$HOME/Library/Application Support/qqnt-export-macos/database.key"
+
+.venv/bin/qqnt-export-macos bridge-status \
+  --key "$HOME/Library/Application Support/qqnt-export-macos/database.key"
+```
+
+然后在支持 MCP 的 Agent 中添加本地 `stdio` 服务。下面是通用配置结构，路径需要替换为本机绝对路径：
+
+```json
+{
+  "mcpServers": {
+    "qqnt-local": {
+      "command": "/absolute/path/qqnt-export-macos/.venv/bin/qqnt-mcp",
+      "env": {
+        "QQNT_KEY_PATH": "/absolute/path/database.key",
+        "QQNT_ALLOW_CONTENT": "1"
+      }
+    }
+  }
+}
+```
+
+可用工具只有三个：`qq_bridge_status`、`qq_recent_conversations` 和 `qq_recent_messages`。没有发送消息工具。若只允许 Agent 查看指定聊天，可再设置：
+
+```text
+QQNT_ALLOW_CONVERSATIONS=c2c:会话标识,group:群标识
+```
+
+正文读取默认关闭，必须明确设置 `QQNT_ALLOW_CONTENT=1`。桥接器本身不联网，但 MCP 返回的正文会进入调用它的 Agent 上下文；使用云端 Agent 时，不能把这理解为“聊天内容完全不离机”。完整说明见 [Agent 桥接](docs/agent-bridge.md)。
 
 ## 完整流程
 

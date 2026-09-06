@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 - 2026-09-07
+
+- Add a read-only local MCP server for recent QQNT messages.
+- Add stable live database/WAL mirroring with checkpoint-race retries.
+- Add bounded protobuf previews without returning raw message bodies.
+- Require an explicit environment switch before MCP message-content access.
+- Add an optional per-conversation allowlist and private key installer.
+
 ## 0.1.0 - 2026-09-07
 
 - Add ARM64 Mach-O locator for `nt_sqlite3_key_v2`.

@@ -21,3 +21,18 @@ jobs:
       - run: python -m pip install -e '.[test]'
       - run: python -m pytest
       - run: python -m compileall -q src tests
+
+  bridge:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: brew install sqlcipher
+      - run: python -m pip install -e '.[bridge,test]'
+        env:
+          CFLAGS: -I/opt/homebrew/opt/sqlcipher/include
+          LDFLAGS: -L/opt/homebrew/opt/sqlcipher/lib
+      - run: python -m pytest
+      - run: python -m compileall -q src tests

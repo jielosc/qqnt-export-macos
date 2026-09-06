@@ -22,3 +22,9 @@ These projects documented or demonstrated important parts of the QQNT database f
 ## QQ
 
 QQ is proprietary software. This project neither bundles nor licenses it. QQ and related names and marks belong to their respective rights holders.
+
+## Model Context Protocol Python SDK
+
+- Project: <https://github.com/modelcontextprotocol/python-sdk>
+- License: MIT
+- Use: optional local `stdio` server for read-only Agent access

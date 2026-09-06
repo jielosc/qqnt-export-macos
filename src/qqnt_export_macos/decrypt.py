@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 from typing import Iterable
+from urllib.parse import quote
 
 
 HEADER_SIZE = 1024
@@ -35,9 +36,13 @@ def _read_key(path: Path) -> str:
     return key
 
 
-def _open_encrypted(path: Path, key: str):
+def _open_encrypted(path: Path, key: str, *, read_only: bool = False):
     sqlcipher = _sqlcipher_module()
-    connection = sqlcipher.connect(str(path), isolation_level=None)
+    if read_only:
+        uri = f"file:{quote(str(path), safe='/')}?mode=ro"
+        connection = sqlcipher.connect(uri, uri=True, isolation_level=None)
+    else:
+        connection = sqlcipher.connect(str(path), isolation_level=None)
     escaped_key = key.replace("'", "''")
     # QQNT requires the page-size pragma before the key pragma.
     connection.execute("PRAGMA cipher_page_size = 4096")
@@ -46,6 +51,8 @@ def _open_encrypted(path: Path, key: str):
     connection.execute("PRAGMA cipher_hmac_algorithm = HMAC_SHA1")
     connection.execute("PRAGMA cipher_kdf_algorithm = PBKDF2_HMAC_SHA512")
     connection.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    if read_only:
+        connection.execute("PRAGMA query_only = ON")
     return connection
 
 

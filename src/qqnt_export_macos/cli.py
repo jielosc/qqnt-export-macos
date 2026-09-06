@@ -16,6 +16,7 @@ from .appcopy import DEFAULT_QQ_APP, prepare_app
 from .decrypt import DEFAULT_DATABASES, decrypt_directory
 from .exporter import bootstrap_exporter, run_exporter, write_config
 from .macho import locate_key_function
+from .recent import DEFAULT_BRIDGE_CACHE, QQRecentReader, install_bridge_key
 from .snapshot import (
     DEFAULT_QQ_ROOT,
     create_snapshot,
@@ -126,6 +127,29 @@ def _build_parser() -> argparse.ArgumentParser:
     verify.add_argument(
         "--privatize", action="store_true", help="set directories/files to 0700/0600"
     )
+
+    for name, help_text in (
+        ("bridge-status", "test a read-only live QQNT mirror"),
+        ("recent", "read recent messages from a live QQNT mirror"),
+    ):
+        bridge = subparsers.add_parser(name, help=help_text)
+        bridge.add_argument("--key", type=Path, required=True)
+        bridge.add_argument("--source", type=Path, default=DEFAULT_QQ_ROOT)
+        bridge.add_argument("--cache", type=Path, default=DEFAULT_BRIDGE_CACHE)
+        bridge.add_argument("--account", help="optional nt_qq_… directory name")
+        if name == "recent":
+            bridge.add_argument("--minutes", type=int, default=10)
+            bridge.add_argument("--limit", type=int, default=50)
+            bridge.add_argument("--conversation")
+
+    bridge_key = subparsers.add_parser(
+        "install-bridge-key", help="validate and privately retain only the working key"
+    )
+    bridge_key.add_argument("candidates", type=Path)
+    bridge_key.add_argument("destination", type=Path)
+    bridge_key.add_argument("--source", type=Path, default=DEFAULT_QQ_ROOT)
+    bridge_key.add_argument("--cache", type=Path, default=DEFAULT_BRIDGE_CACHE)
+    bridge_key.add_argument("--account", help="optional nt_qq_… directory name")
     return parser
 
 
@@ -191,6 +215,36 @@ def main(argv: list[str] | None = None) -> int:
             for failure in failures:
                 print(f"ERROR: {failure}", file=sys.stderr)
             return 1 if failures else 0
+        if arguments.command in {"bridge-status", "recent"}:
+            reader = QQRecentReader(
+                arguments.key,
+                root=arguments.source,
+                cache_dir=arguments.cache,
+                account=arguments.account,
+            )
+            result = (
+                reader.status()
+                if arguments.command == "bridge-status"
+                else reader.recent(
+                    minutes=arguments.minutes,
+                    limit=arguments.limit,
+                    conversation_id=arguments.conversation,
+                )
+            )
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        if arguments.command == "install-bridge-key":
+            fingerprint = install_bridge_key(
+                arguments.candidates,
+                arguments.destination,
+                root=arguments.source,
+                cache_dir=arguments.cache,
+                account=arguments.account,
+            )
+            print(
+                f"installed one validated key privately; fingerprint: {fingerprint}"
+            )
+            return 0
     except (FileNotFoundError, FileExistsError, RuntimeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

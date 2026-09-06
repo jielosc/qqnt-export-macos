@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qqnt-export-macos"
-version = "0.1.0"
-description = "Local-first QQNT chat export toolkit for Apple Silicon macOS without disabling SIP"
+version = "0.2.0"
+description = "Local-first QQNT export and read-only agent bridge for Apple Silicon macOS"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-only" }
@@ -24,6 +24,7 @@ dependencies = []
 
 [project.optional-dependencies]
 decrypt = ["sqlcipher3>=0.5"]
+bridge = ["sqlcipher3>=0.5", "mcp>=2.1,<3"]
 test = ["pytest>=8"]
 
 [project.urls]
@@ -32,6 +33,7 @@ Issues = "https://github.com/jielosc/qqnt-export-macos/issues"
 
 [project.scripts]
 qqnt-export-macos = "qqnt_export_macos.cli:main"
+qqnt-mcp = "qqnt_export_macos.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
