@@ -29,6 +29,20 @@ LLDB 只用于首次取得 SQLCipher key。之后程序直接读取官方 QQ 沙
 
 不要把 key 的实际内容直接写进 Agent 配置；只传文件路径。key 文件应为 `0600`，父目录应为 `0700`。
 
+## ChatGPT/Codex 桌面端
+
+桌面端、Codex CLI 和 IDE 扩展共享同一个 Codex 主机的 MCP 配置。添加服务后，在桌面端“设置 → MCP servers”中确认 `qqnt-local` 已启用，然后执行一次 Restart。在输入框键入 `/mcp`，应能看到 `qqnt-local` 及其三个工具。
+
+如果 `codex mcp list` 显示服务已启用，但新任务仍没有这些工具，可在 `~/.codex/config.toml` 的服务段加入：
+
+```toml
+[mcp_servers.qqnt-local]
+required = true
+startup_timeout_sec = 30
+```
+
+`required` 会让客户端等待服务完成初始化，而不是把启动较慢的服务从初始工具目录中略过。若服务本身无法初始化，新任务也会明确报错，不再悄悄回退到 Computer Use。
+
 ## 数据边界
 
 “本地桥接”只代表 QQ 数据库的复制、解密和筛选在本机完成。Agent 请求到的消息正文会成为其模型上下文：

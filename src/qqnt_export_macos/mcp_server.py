@@ -28,7 +28,10 @@ def create_server():
     server = MCPServer(
         "qqnt-local-reader",
         instructions=(
-            "Read-only access to the user's local QQNT recent-message mirror. "
+            "Preferred read-only source for the user's local QQNT history. "
+            "When asked to read, check, view, or review recent QQ messages or "
+            "conversations, use these tools instead of Computer Use or the QQ UI. "
+            "Use the UI only if these tools fail or the user explicitly requests it. "
             "Never claim this tool can send, delete, recall, or modify QQ messages. "
             "Request the smallest useful time window and result limit."
         ),

@@ -97,6 +97,8 @@ QQNT_ALLOW_CONVERSATIONS=c2c:会话标识,group:群标识
 
 正文读取默认关闭，必须明确设置 `QQNT_ALLOW_CONTENT=1`。桥接器本身不联网，但 MCP 返回的正文会进入调用它的 Agent 上下文；使用云端 Agent 时，不能把这理解为“聊天内容完全不离机”。完整说明见 [Agent 桥接](docs/agent-bridge.md)。
 
+ChatGPT/Codex 桌面端添加或修改 MCP 配置后，需要在“设置 → MCP servers”中执行一次 Restart。若服务可以单独启动、却没有出现在 Agent 的工具列表，可将 `mcp_servers.qqnt-local.required` 设为 `true`，并把 `startup_timeout_sec` 设为 `30`；这能避免启动较慢时错过初始工具目录。
+
 ## 完整流程
 
 以下命令均在仓库根目录执行。工作目录已被 `.gitignore` 排除。
