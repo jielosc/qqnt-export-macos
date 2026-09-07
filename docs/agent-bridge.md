@@ -48,6 +48,17 @@ startup_timeout_sec = 30
 
 `required` 会让客户端等待服务完成初始化，而不是把启动较慢的服务从初始工具目录中略过。若服务本身无法初始化，新任务也会明确报错，不再悄悄回退到 Computer Use。
 
+### Agent Skill 入口
+
+部分 Agent 会把 MCP 工具放进按需加载的隐藏目录。仓库内置 [`qq-messages`](../skills/qq-messages/SKILL.md) Skill，使用短小、明确的技能描述匹配 QQ 读取、搜索、总结、回顾和监控请求；其 `agents/openai.yaml` 声明了 `qqnt-local` MCP 依赖，并允许隐式调用。
+
+```bash
+mkdir -p "$HOME/.codex/skills"
+ln -s "$PWD/skills/qq-messages" "$HOME/.codex/skills/qq-messages"
+```
+
+安装后重启 Codex 并新建任务。正常请求无需写工具名；若想强制选中技能，可在请求中写 `$qq-messages`。Skill 只提供发现和调用流程，不保存 key、数据库或聊天正文。
+
 ## MCP 内置意图路由
 
 MCP 服务在初始化时直接向 Agent 发布中英双语的路由规则、工具说明、参数说明和只读/幂等标注。正常使用不需要修改全局 `~/.codex/AGENTS.md`，也不需要在每次请求里强调“使用 MCP”。

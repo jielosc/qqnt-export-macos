@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 - 2026-09-07
+
+- Add an implicitly discoverable `qq-messages` Agent Skill for QQ reading intents.
+- Declare the hidden `qqnt-local` MCP server as the Skill's tool dependency.
+- Route named groups, conversation discovery, diagnostics, and complete pagination.
+- Keep message access read-only and prohibit silent Computer Use or UI fallback.
+
 ## 0.3.1 - 2026-09-07
 
 - Add bilingual, intent-driven MCP server and tool descriptions for automatic routing.

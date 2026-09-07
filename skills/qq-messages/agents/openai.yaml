@@ -1,0 +1,13 @@
+interface:
+  display_name: "QQ 消息读取"
+  short_description: "通过只读本地桥接读取、搜索并完整总结 QQ 聊天记录"
+  default_prompt: "Use $qq-messages to summarize all recent messages from a named QQ group."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "qqnt-local"
+      description: "Read-only local QQNT message bridge"
+
+policy:
+  allow_implicit_invocation: true

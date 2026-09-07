@@ -108,6 +108,17 @@ ChatGPT/Codex 桌面端添加或修改 MCP 配置后，需要在“设置 → MC
 
 MCP 自身已经内置中英双语的意图路由、参数说明、只读/幂等标注和禁止 UI 回退规则，因此不需要在全局 `~/.codex/AGENTS.md` 重复写 QQ 指令。Agent 会区分正文读取、群名查找、活跃会话概览和故障诊断；长窗口摘要会按游标读完，而不是停在第一页。详见 [Agent 桥接文档](docs/agent-bridge.md#mcp-内置意图路由)。
 
+### 安装 QQ 消息 Skill
+
+有些 Agent 会把 MCP 工具按需隐藏，只有在识别到相关能力后才加载。仓库内置的 [`qq-messages` Skill](skills/qq-messages/SKILL.md) 提供轻量的意图入口，并声明对 `qqnt-local` MCP 的依赖。安装到 Codex：
+
+```bash
+mkdir -p "$HOME/.codex/skills"
+ln -s "$PWD/skills/qq-messages" "$HOME/.codex/skills/qq-messages"
+```
+
+Skill 默认允许隐式调用。新建任务后，用户只需说“总结某某 QQ 群最近两小时的消息”；也可以显式使用 `$qq-messages`。这不会把聊天记录复制进 Skill，实际正文仍由本地只读 MCP 按需返回。
+
 ## 完整流程
 
 以下命令均在仓库根目录执行。工作目录已被 `.gitignore` 排除。
