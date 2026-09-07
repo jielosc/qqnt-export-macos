@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qqnt-export-macos"
-version = "0.3.0"
+version = "0.3.1"
 description = "Local-first QQNT export and read-only agent bridge for Apple Silicon macOS"
 readme = "README.md"
 requires-python = ">=3.11"

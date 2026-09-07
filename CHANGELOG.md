@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 - 2026-09-07
+
+- Add bilingual, intent-driven MCP server and tool descriptions for automatic routing.
+- Publish parameter-level guidance for time windows, group names, and cursor pagination.
+- Mark every MCP tool as local, read-only, non-destructive, idempotent, and closed-world.
+- Keep all essential routing and no-UI-fallback rules in the first 512 instruction characters.
+- Make global `AGENTS.md` routing unnecessary when the MCP server loads successfully.
+
 ## 0.3.0 - 2026-09-07
 
 - Raise the per-page message limit to 1000 and add stable cursor pagination.
