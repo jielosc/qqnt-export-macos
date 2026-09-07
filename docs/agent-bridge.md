@@ -43,6 +43,21 @@ startup_timeout_sec = 30
 
 `required` 会让客户端等待服务完成初始化，而不是把启动较慢的服务从初始工具目录中略过。若服务本身无法初始化，新任务也会明确报错，不再悄悄回退到 Computer Use。
 
+## 禁止静默回退到界面
+
+MCP 服务的初始化指令已经要求：所有 QQ 消息读取都使用 `qqnt-local`；工具失败时报告错误，不得静默改用 Computer Use、屏幕截图、辅助功能、OCR 或 QQ 界面。只有用户明确要求检查 QQ 界面时才能使用 UI。
+
+服务器指令只有在 MCP 成功初始化后才存在。若要让“工具没有加载”的任务也禁止回退，可把下面的规则加入 `~/.codex/AGENTS.md`：
+
+```markdown
+# Local QQ read routing
+
+- For any request to read, inspect, summarize, search, or monitor QQ messages or QQ conversations, use the read-only `qqnt-local` MCP tools (`qq_bridge_status`, `qq_recent_messages`, and `qq_recent_conversations`). Do not use Computer Use, screen capture, accessibility APIs, OCR, or the QQ user interface for these requests unless the user explicitly asks to inspect the UI.
+- If the `qqnt-local` tools are unavailable in the current task, say that the task did not load the local QQ MCP server and ask the user to start a new task after restarting the MCP server. Do not silently fall back to Computer Use.
+```
+
+Codex 只在任务启动时读取这份指令；修改后要新建任务验证。正常读取无需在请求中额外写“用 MCP”。
+
 ## 数据边界
 
 “本地桥接”只代表 QQ 数据库的复制、解密和筛选在本机完成。Agent 请求到的消息正文会成为其模型上下文：

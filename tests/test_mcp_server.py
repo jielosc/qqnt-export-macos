@@ -32,6 +32,12 @@ def test_mcp_exposes_only_read_tools():
     }
 
 
+def test_server_instructions_forbid_silent_ui_fallback():
+    first_512 = mcp_server.SERVER_INSTRUCTIONS[:512]
+    assert "do not use Computer Use" in first_512
+    assert "never silently fall back to the UI" in first_512
+
+
 def test_mcp_refuses_content_without_explicit_switch(monkeypatch):
     mcp = pytest.importorskip("mcp")
     monkeypatch.delenv("QQNT_ALLOW_CONTENT", raising=False)

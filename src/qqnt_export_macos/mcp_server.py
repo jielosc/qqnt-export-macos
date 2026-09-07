@@ -7,6 +7,18 @@ import os
 from .recent import reader_from_environment
 
 
+SERVER_INSTRUCTIONS = (
+    "Exclusive read-only source for the user's local QQNT history. "
+    "For every request to read, inspect, summarize, search, check, or monitor QQ "
+    "messages or conversations, use these tools and do not use Computer Use, screen "
+    "capture, accessibility APIs, OCR, or the QQ UI. Only inspect the QQ UI when the "
+    "user explicitly requests UI inspection. If a tool is unavailable or fails, report "
+    "that error; never silently fall back to the UI. Never claim these tools can send, "
+    "delete, recall, or modify QQ messages. Request the smallest useful time window "
+    "and result limit."
+)
+
+
 def _enabled(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -27,14 +39,7 @@ def create_server():
 
     server = MCPServer(
         "qqnt-local-reader",
-        instructions=(
-            "Preferred read-only source for the user's local QQNT history. "
-            "When asked to read, check, view, or review recent QQ messages or "
-            "conversations, use these tools instead of Computer Use or the QQ UI. "
-            "Use the UI only if these tools fail or the user explicitly requests it. "
-            "Never claim this tool can send, delete, recall, or modify QQ messages. "
-            "Request the smallest useful time window and result limit."
-        ),
+        instructions=SERVER_INSTRUCTIONS,
     )
 
     @server.tool()

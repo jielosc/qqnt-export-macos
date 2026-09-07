@@ -99,6 +99,8 @@ QQNT_ALLOW_CONVERSATIONS=c2c:会话标识,group:群标识
 
 ChatGPT/Codex 桌面端添加或修改 MCP 配置后，需要在“设置 → MCP servers”中执行一次 Restart。若服务可以单独启动、却没有出现在 Agent 的工具列表，可将 `mcp_servers.qqnt-local.required` 设为 `true`，并把 `startup_timeout_sec` 设为 `30`；这能避免启动较慢时错过初始工具目录。
 
+为避免 MCP 没有加载时 Agent 静默改用 Computer Use，可在 `~/.codex/AGENTS.md` 增加一条全局路由规则：QQ 消息读取只能调用上述三个 `qqnt-local` 工具；工具不可用时直接报告，不得回退到 UI。可复制的完整规则见 [Agent 桥接文档](docs/agent-bridge.md#禁止静默回退到界面)。新任务会读取该规则，请求中不需要额外强调“用 MCP”。
+
 ## 完整流程
 
 以下命令均在仓库根目录执行。工作目录已被 `.gitignore` 排除。
