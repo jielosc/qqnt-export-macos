@@ -141,6 +141,8 @@ def _build_parser() -> argparse.ArgumentParser:
             bridge.add_argument("--minutes", type=int, default=10)
             bridge.add_argument("--limit", type=int, default=50)
             bridge.add_argument("--conversation")
+            bridge.add_argument("--conversation-name")
+            bridge.add_argument("--cursor")
 
     bridge_key = subparsers.add_parser(
         "install-bridge-key", help="validate and privately retain only the working key"
@@ -229,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
                     minutes=arguments.minutes,
                     limit=arguments.limit,
                     conversation_id=arguments.conversation,
+                    conversation_name=arguments.conversation_name,
+                    cursor=arguments.cursor,
                 )
             )
             print(json.dumps(result, indent=2, ensure_ascii=False))

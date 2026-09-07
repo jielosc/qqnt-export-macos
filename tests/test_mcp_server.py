@@ -27,6 +27,7 @@ def test_mcp_exposes_only_read_tools():
 
     assert asyncio.run(inspect_tools()) == {
         "qq_bridge_status",
+        "qq_find_conversations",
         "qq_recent_conversations",
         "qq_recent_messages",
     }

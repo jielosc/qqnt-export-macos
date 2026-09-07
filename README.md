@@ -89,7 +89,14 @@ python3 -m venv .venv
 }
 ```
 
-可用工具只有三个：`qq_bridge_status`、`qq_recent_conversations` 和 `qq_recent_messages`。没有发送消息工具。若只允许 Agent 查看指定聊天，可再设置：
+可用工具只有四个：
+
+- `qq_bridge_status`：检查只读热镜像状态；
+- `qq_find_conversations`：按可读群名或会话 ID 查找会话；
+- `qq_recent_conversations`：列出活跃会话、群名及窗口内消息数；
+- `qq_recent_messages`：读取消息，每页最多 1000 条，并用 `next_cursor` 连续分页。
+
+没有发送消息工具。Agent 可以直接按群名查询；若重名或模糊命中多个群，接口会返回候选名称和群号供用户确认，不会自行猜测。若只允许 Agent 查看指定聊天，可再设置：
 
 ```text
 QQNT_ALLOW_CONVERSATIONS=c2c:会话标识,group:群标识
@@ -99,7 +106,7 @@ QQNT_ALLOW_CONVERSATIONS=c2c:会话标识,group:群标识
 
 ChatGPT/Codex 桌面端添加或修改 MCP 配置后，需要在“设置 → MCP servers”中执行一次 Restart。若服务可以单独启动、却没有出现在 Agent 的工具列表，可将 `mcp_servers.qqnt-local.required` 设为 `true`，并把 `startup_timeout_sec` 设为 `30`；这能避免启动较慢时错过初始工具目录。
 
-为避免 MCP 没有加载时 Agent 静默改用 Computer Use，可在 `~/.codex/AGENTS.md` 增加一条全局路由规则：QQ 消息读取只能调用上述三个 `qqnt-local` 工具；工具不可用时直接报告，不得回退到 UI。可复制的完整规则见 [Agent 桥接文档](docs/agent-bridge.md#禁止静默回退到界面)。新任务会读取该规则，请求中不需要额外强调“用 MCP”。
+为避免 MCP 没有加载时 Agent 静默改用 Computer Use，可在 `~/.codex/AGENTS.md` 增加一条全局路由规则：QQ 消息读取只能调用上述四个 `qqnt-local` 工具；工具不可用时直接报告，不得回退到 UI。可复制的完整规则见 [Agent 桥接文档](docs/agent-bridge.md#禁止静默回退到界面)。新任务会读取该规则，请求中不需要额外强调“用 MCP”。
 
 ## 完整流程
 

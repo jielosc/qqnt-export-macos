@@ -15,7 +15,10 @@ SERVER_INSTRUCTIONS = (
     "user explicitly requests UI inspection. If a tool is unavailable or fails, report "
     "that error; never silently fall back to the UI. Never claim these tools can send, "
     "delete, recall, or modify QQ messages. Request the smallest useful time window "
-    "and result limit."
+    "and result limit. When the user names a group, resolve it with "
+    "qq_find_conversations or the conversation_name argument; never ask them to know a "
+    "group number. For summaries, follow next_cursor until has_more is false and "
+    "summarize incrementally; never present the first page as the complete window."
 )
 
 
@@ -50,22 +53,31 @@ def create_server():
     @server.tool()
     def qq_recent_messages(
         minutes: int = 10,
-        limit: int = 50,
+        limit: int = 200,
         conversation_id: str = "",
+        conversation_name: str = "",
+        cursor: str = "",
     ) -> dict:
-        """Read recent QQ messages in chronological order.
+        """Read one paginated batch of recent QQ messages in chronological order.
 
         Args:
-            minutes: Look-back window from 1 minute to 7 days.
-            limit: Maximum messages to return, capped at 200.
+            minutes: Look-back window from 1 minute to 20 years.
+            limit: Messages per page, capped at 1000. Use next_cursor for more.
             conversation_id: Optional c2c:…, group:…, or dataline:pc identifier.
+            conversation_name: Optional exact or uniquely matching human-readable group name.
+            cursor: Optional opaque next_cursor returned by the preceding page.
         """
         if not _enabled("QQNT_ALLOW_CONTENT"):
             raise RuntimeError(
                 "message content access is disabled; explicitly set QQNT_ALLOW_CONTENT=1"
             )
-        requested = conversation_id or None
+        if conversation_id and conversation_name:
+            raise RuntimeError("use conversation_id or conversation_name, not both")
+        reader = reader_from_environment()
         allowed = _allowlist()
+        requested = conversation_id or None
+        if conversation_name:
+            requested, _ = reader.resolve_group_name(conversation_name, allowed)
         if allowed is not None:
             if requested is None:
                 raise RuntimeError(
@@ -73,38 +85,56 @@ def create_server():
                 )
             if requested not in allowed:
                 raise RuntimeError("conversation_id is not in QQNT_ALLOW_CONVERSATIONS")
-        return reader_from_environment().recent(
-            minutes=minutes, limit=limit, conversation_id=requested
+        return reader.recent(
+            minutes=minutes,
+            limit=limit,
+            conversation_id=requested,
+            cursor=cursor or None,
         )
 
     @server.tool()
     def qq_recent_conversations(minutes: int = 1440, limit: int = 30) -> dict:
-        """List recently active conversation identifiers without message content."""
-        result = reader_from_environment().recent(
-            minutes=minutes, limit=min(max(limit * 10, limit), 200)
-        )
-        seen: set[str] = set()
-        conversations = []
+        """List active conversations with group names and message counts."""
+        limit = max(1, min(limit, 1000))
         allowed = _allowlist()
-        for message in reversed(result["messages"]):
-            identifier = message["conversation_id"]
-            if identifier in seen or (allowed is not None and identifier not in allowed):
-                continue
-            seen.add(identifier)
-            conversations.append(
-                {
-                    "conversation_id": identifier,
-                    "latest_time": message["time"],
-                    "latest_sender": message["sender"],
-                }
-            )
-            if len(conversations) >= max(1, min(limit, 100)):
-                break
-        return {
-            "synced_at": result["synced_at"],
-            "count": len(conversations),
-            "conversations": conversations,
-        }
+        requested_limit = 5000 if allowed is not None else limit
+        result = reader_from_environment().conversations(
+            minutes=minutes, limit=requested_limit
+        )
+        if allowed is not None:
+            result["conversations"] = [
+                item
+                for item in result["conversations"]
+                if item["conversation_id"] in allowed
+            ][:limit]
+            result["count"] = len(result["conversations"])
+        return result
+
+    @server.tool()
+    def qq_find_conversations(
+        query: str = "", minutes: int = 365 * 24 * 60, limit: int = 20
+    ) -> dict:
+        """Find QQ conversations by human-readable group name or conversation ID.
+
+        Use this before reading messages when the user names a group. Exact matches are
+        ranked first; multiple matches are returned so the user can disambiguate.
+        """
+        limit = max(1, min(limit, 100))
+        allowed = _allowlist()
+        requested_limit = 100 if allowed is None else 1000
+        result = reader_from_environment().find_conversations(
+            query, minutes=minutes, limit=requested_limit
+        )
+        if allowed is not None:
+            result["matches"] = [
+                item
+                for item in result["matches"]
+                if item["conversation_id"] in allowed
+            ]
+            result["matched_count"] = len(result["matches"])
+        result["matches"] = result["matches"][:limit]
+        result["count"] = len(result["matches"])
+        return result
 
     return server
 
