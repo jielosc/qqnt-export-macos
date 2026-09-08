@@ -12,6 +12,7 @@
 - 离线模式不会自动下载缺失的 QQ CDN 资源
 - 提供只读、本机 `stdio` MCP 接口，不开放网络端口
 - 运行 QQ 时可从数据库与 WAL 建立数秒级的最新消息镜像
+- 可将热镜像中的精确日期或任意时间段直接导出为 ChatLab JSON
 
 > [!WARNING]
 > 仅处理你有权访问的账号与数据。数据库密钥、明文数据库和导出结果都是敏感信息；不要上传、提交或发送给第三方。本项目与腾讯无关，QQ 更新后流程可能失效。
@@ -58,6 +59,41 @@ python3 -m venv .venv
 ```
 
 `doctor` 应显示 macOS、Apple Silicon、SIP、LLDB、codesign 和 git 均为 `ok`。QQ 完整签名若为 `WARN`，先从腾讯官方渠道重装 QQ，再继续。
+
+## 从热镜像导出 ChatLab JSON
+
+`export-chatlab` 是给下游程序使用的稳定文件边界。导出器负责 QQ 数据库、protobuf、回复关系和消息类型；下游只需读取 ChatLab JSON，无需理解 QQ 内部结构。
+
+导出一个完整自然日，时间范围为左闭右开 `[00:00, 次日 00:00)`：
+
+```bash
+.venv/bin/qqnt-export-macos export-chatlab work/chatlab-2026-09-07.json \
+  --key "$HOME/Library/Application Support/qqnt-export-macos/database.key" \
+  --conversation group:群号 \
+  --date 2026-09-07 \
+  --timezone Asia/Shanghai
+```
+
+导出最近 30 分钟：
+
+```bash
+.venv/bin/qqnt-export-macos export-chatlab work/recent-30m.json \
+  --key "$HOME/Library/Application Support/qqnt-export-macos/database.key" \
+  --conversation group:群号 \
+  --minutes 30
+```
+
+也可以用带 UTC 偏移的 ISO 时间指定任意范围：
+
+```bash
+.venv/bin/qqnt-export-macos export-chatlab work/range.json \
+  --key "$HOME/Library/Application Support/qqnt-export-macos/database.key" \
+  --conversation group:群号 \
+  --start 2026-09-07T08:00:00+08:00 \
+  --end 2026-09-07T12:00:00+08:00
+```
+
+默认拒绝覆盖已有文件；需要可重复生成固定日期文件时显式传入 `--overwrite`。输出文件权限为 `0600`，写入过程使用同目录临时文件并原子替换。回复消息使用标准 `replyToMessageId`，同时携带 `replyContext` 扩展字段，使引用目标不在本次导出范围内时仍能保留原消息摘要。
 
 ## Agent 最近消息桥接
 

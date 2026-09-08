@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
 import json
 import os
@@ -11,8 +12,10 @@ import platform
 import shutil
 import subprocess
 import sys
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .appcopy import DEFAULT_QQ_APP, prepare_app
+from .chatlab import export_chatlab_range, write_chatlab_payload
 from .decrypt import DEFAULT_DATABASES, decrypt_directory
 from .exporter import bootstrap_exporter, run_exporter, write_config
 from .macho import locate_key_function
@@ -60,6 +63,37 @@ def _doctor() -> int:
 
 def _fingerprint(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+
+
+def _parse_datetime(value: str) -> dt.datetime:
+    try:
+        parsed = dt.datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid ISO datetime: {value}") from exc
+    if parsed.tzinfo is None:
+        raise argparse.ArgumentTypeError("datetime must include a UTC offset")
+    return parsed
+
+
+def _chatlab_range(arguments: argparse.Namespace) -> tuple[dt.datetime, dt.datetime]:
+    if arguments.date:
+        try:
+            zone = ZoneInfo(arguments.timezone)
+            day = dt.date.fromisoformat(arguments.date)
+        except (ValueError, ZoneInfoNotFoundError) as exc:
+            raise ValueError("invalid ChatLab export date or timezone") from exc
+        start = dt.datetime.combine(day, dt.time.min, tzinfo=zone)
+        return start, start + dt.timedelta(days=1)
+    if arguments.start:
+        if arguments.end is None:
+            raise ValueError("--end is required with --start")
+        return arguments.start, arguments.end
+    if arguments.end is not None:
+        raise ValueError("--end requires --start")
+    if arguments.minutes is not None and arguments.minutes <= 0:
+        raise ValueError("--minutes must be positive")
+    end = dt.datetime.now().astimezone()
+    return end - dt.timedelta(minutes=arguments.minutes or 10), end
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -143,6 +177,26 @@ def _build_parser() -> argparse.ArgumentParser:
             bridge.add_argument("--conversation")
             bridge.add_argument("--conversation-name")
             bridge.add_argument("--cursor")
+
+    chatlab = subparsers.add_parser(
+        "export-chatlab",
+        help="export an exact live-message range as one ChatLab JSON file",
+    )
+    chatlab.add_argument("destination", type=Path)
+    chatlab.add_argument("--key", type=Path, required=True)
+    chatlab.add_argument("--source", type=Path, default=DEFAULT_QQ_ROOT)
+    chatlab.add_argument("--cache", type=Path, default=DEFAULT_BRIDGE_CACHE)
+    chatlab.add_argument("--account", help="optional nt_qq_… directory name")
+    conversation = chatlab.add_mutually_exclusive_group(required=True)
+    conversation.add_argument("--conversation")
+    conversation.add_argument("--conversation-name")
+    time_range = chatlab.add_mutually_exclusive_group()
+    time_range.add_argument("--date", help="calendar day in YYYY-MM-DD format")
+    time_range.add_argument("--minutes", type=int, help="recent rolling window")
+    time_range.add_argument("--start", type=_parse_datetime, help="inclusive ISO datetime")
+    chatlab.add_argument("--end", type=_parse_datetime, help="exclusive ISO datetime; requires --start")
+    chatlab.add_argument("--timezone", default="Asia/Shanghai")
+    chatlab.add_argument("--overwrite", action="store_true")
 
     bridge_key = subparsers.add_parser(
         "install-bridge-key", help="validate and privately retain only the working key"
@@ -236,6 +290,28 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        if arguments.command == "export-chatlab":
+            reader = QQRecentReader(
+                arguments.key,
+                root=arguments.source,
+                cache_dir=arguments.cache,
+                account=arguments.account,
+            )
+            range_start, range_end = _chatlab_range(arguments)
+            payload = export_chatlab_range(
+                reader,
+                range_start=range_start,
+                range_end=range_end,
+                conversation_id=arguments.conversation,
+                conversation_name=arguments.conversation_name,
+            )
+            destination = write_chatlab_payload(
+                arguments.destination,
+                payload,
+                overwrite=arguments.overwrite,
+            )
+            print(destination)
             return 0
         if arguments.command == "install-bridge-key":
             fingerprint = install_bridge_key(

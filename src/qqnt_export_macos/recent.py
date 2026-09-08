@@ -204,6 +204,44 @@ def query_recent_page(
     return RecentQueryPage(rows, cutoff, limit, has_more, next_cursor)
 
 
+def query_message_range(
+    connection,
+    *,
+    start_timestamp: int,
+    end_timestamp: int,
+    conversation_id: str,
+) -> list[dict]:
+    """Read all messages in one exact half-open interval for one conversation."""
+    start_timestamp = int(start_timestamp)
+    end_timestamp = int(end_timestamp)
+    if start_timestamp < 0 or start_timestamp >= end_timestamp:
+        raise ValueError("invalid message time range")
+    kind, conversation_key = _conversation_filter(conversation_id)
+    assert kind is not None and conversation_key is not None
+    table = {
+        "c2c": "c2c_msg_table",
+        "group": "group_msg_table",
+        "dataline": "dataline_msg_table",
+    }[kind]
+    tables = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    if table not in tables:
+        return []
+
+    expression = _conversation_expression(kind)
+    query, parameters = _table_query(kind, table, start_timestamp, conversation_key)
+    query += " AND [40050] < ?"
+    parameters.append(end_timestamp)
+    query += " ORDER BY [40050] ASC, [40001] ASC"
+    cursor = connection.execute(query, parameters)
+    columns = [item[0] for item in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
 def query_conversations(
     connection, *, minutes: int = 24 * 60, limit: int = 100
 ) -> list[dict]:

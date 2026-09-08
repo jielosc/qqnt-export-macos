@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add `export-chatlab` for exact-day, recent-window, and explicit-range exports from the live read-only mirror.
+- Preserve reply identifiers and embedded quoted-message context in ChatLab output.
+- Keep ChatLab writes private and atomic while leaving existing parent directory permissions unchanged.
+
 ## 0.4.0 - 2026-09-07
 
 - Add an implicitly discoverable `qq-messages` Agent Skill for QQ reading intents.

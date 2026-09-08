@@ -7,6 +7,7 @@ from qqnt_export_macos.recent import (
     QQRecentReader,
     query_conversations,
     query_group_names,
+    query_message_range,
     query_recent,
     query_recent_page,
 )
@@ -80,6 +81,30 @@ def test_recent_query_paginates_without_gaps_or_duplicates():
     assert first.has_more and second.has_more and not third.has_more
     assert third.next_cursor is None
     assert first.cutoff == second.cutoff == third.cutoff
+
+
+def test_message_range_has_exact_boundaries_and_chronological_order():
+    connection = sqlite3.connect(":memory:")
+    _schema(connection, "group_msg_table")
+    connection.executemany(
+        "INSERT INTO group_msg_table VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (1, 1, "sender", 1, 99, "group", 42, 42, "", "", 2, b""),
+            (3, 3, "sender", 1, 101, "group", 42, 42, "", "", 2, b""),
+            (2, 2, "sender", 1, 100, "group", 42, 42, "", "", 2, b""),
+            (4, 4, "sender", 1, 102, "group", 42, 42, "", "", 2, b""),
+            (5, 5, "sender", 1, 100, "group", 43, 43, "", "", 2, b""),
+        ],
+    )
+
+    rows = query_message_range(
+        connection,
+        start_timestamp=100,
+        end_timestamp=102,
+        conversation_id="group:42",
+    )
+
+    assert [row["message_id"] for row in rows] == [2, 3]
 
 
 def test_recent_query_rejects_invalid_cursor():
