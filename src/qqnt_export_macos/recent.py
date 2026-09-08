@@ -15,7 +15,7 @@ import time
 
 from .decrypt import _open_encrypted, _read_key
 from .live import LiveDatabaseMirror, discover_active_nt_db, select_mirror_key
-from .message_preview import message_preview
+from .message_preview import message_metadata, message_preview
 from .snapshot import DEFAULT_QQ_ROOT
 
 
@@ -271,6 +271,38 @@ def query_group_names(connection) -> dict[str, str]:
     return names
 
 
+def query_group_member_names(connection, group_id: str) -> dict[str, str]:
+    """Read group-member display names keyed by QQNT UID and UIN."""
+    tables = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    if "group_member3" not in tables:
+        return {}
+
+    names: dict[str, str] = {}
+    rows = connection.execute(
+        """
+        SELECT [64003] AS nickname, [20002] AS card,
+               CAST([1000] AS TEXT) AS uid, CAST([1002] AS TEXT) AS uin
+        FROM group_member3
+        WHERE CAST([60001] AS TEXT) = ?
+        """,
+        (group_id,),
+    ).fetchall()
+    for nickname, card, uid, uin in rows:
+        name = str(nickname or "").strip() or str(card or "").strip()
+        if not name:
+            continue
+        for identity in (uid, uin):
+            key = str(identity or "").strip()
+            if key:
+                names.setdefault(key, name)
+    return names
+
+
 class QQRecentReader:
     """Refresh a live mirror and return sanitized recent-message records."""
 
@@ -404,6 +436,22 @@ class QQRecentReader:
             if any(row["kind"] == "group" for row in page.rows)
             else {}
         )
+        member_names_by_group: dict[str, dict[str, str]] = {}
+        if self.group_mirror is not None:
+            group_ids = {
+                str(row["conversation_key"])
+                for row in page.rows
+                if row["kind"] == "group" and row.get("conversation_key")
+            }
+            if group_ids:
+                member_connection = self._mirror_connection(self.group_mirror)
+                try:
+                    member_names_by_group = {
+                        group_id: query_group_member_names(member_connection, group_id)
+                        for group_id in group_ids
+                    }
+                finally:
+                    member_connection.close()
         messages = []
         for row in reversed(page.rows):
             key = str(row.pop("conversation_key") or "unknown")
@@ -424,6 +472,10 @@ class QQRecentReader:
                     "sender": str(sender) if sender is not None else "unknown",
                     "sender_number": row.get("sender_number"),
                     "content": message_preview(body),
+                    "content_metadata": message_metadata(
+                        body,
+                        member_names=member_names_by_group.get(key),
+                    ),
                 }
             )
         return {

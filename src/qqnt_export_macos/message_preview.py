@@ -6,7 +6,7 @@ the raw protobuf body to callers.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 
 class ProtobufDecodeError(ValueError):
@@ -129,3 +129,96 @@ def message_preview(body: bytes | None, max_chars: int = 2000) -> str:
     if len(preview) > max_chars:
         return preview[: max_chars - 1] + "…"
     return preview
+
+
+def message_metadata(
+    body: bytes | None,
+    *,
+    member_names: Mapping[str, str] | None = None,
+) -> dict[str, list[dict]]:
+    """Extract structured @ metadata without exposing the raw protobuf body.
+
+    QQNT represents an @ element as a type-1 element with ``45102 == 2``.
+    ``45101`` contains the rendered ``@display-name`` and ``45103``/``45105``
+    contain the target UIN/UID.  Keep this separate from ``message_preview``
+    so existing consumers of the string ``content`` field remain compatible.
+    """
+
+    empty = {"mentions": [], "elements": []}
+    if not body:
+        return empty
+
+    try:
+        elements = [
+            value
+            for number, wire_type, value in iter_fields(bytes(body))
+            if number == 40800 and wire_type == 2 and isinstance(value, bytes)
+        ]
+        mentions: list[dict] = []
+        structured_elements: list[dict] = []
+        pending_reply: dict[str, str | None] | None = None
+        for element in elements:
+            fields: dict[int, list[int | bytes]] = {}
+            for number, _wire_type, value in iter_fields(element):
+                fields.setdefault(number, []).append(value)
+
+            element_type = fields.get(45002, [0])[-1]
+            if element_type == 7:
+                reply_uid = _text(fields.get(40020, [b""])[-1])
+                reply_uin = fields.get(47403, [0])[-1]
+                pending_reply = {
+                    "uid": reply_uid or None,
+                    "uin": str(reply_uin)
+                    if isinstance(reply_uin, int) and reply_uin
+                    else None,
+                }
+                continue
+
+            mention_kind = fields.get(45102, [0])[-1]
+            if element_type != 1 or not isinstance(mention_kind, int):
+                pending_reply = None
+                continue
+
+            rendered = _text(fields.get(45101, [b""])[-1])
+            if not rendered.startswith("@") or (
+                len(rendered) == 1 and mention_kind != 2 and not pending_reply
+            ):
+                pending_reply = None
+                continue
+
+            if mention_kind not in {0, 2}:
+                pending_reply = None
+                continue
+
+            target_uin = fields.get(45103, [0])[-1]
+            target_uid = _text(fields.get(45105, [b""])[-1])
+            if pending_reply:
+                target_uin = target_uin or pending_reply["uin"] or 0
+                target_uid = target_uid or pending_reply["uid"] or ""
+
+            name = rendered[1:].strip()
+            if mention_kind == 0 and pending_reply and member_names:
+                identity = target_uid or str(target_uin)
+                mapped_name = str(member_names.get(identity) or "").strip()
+                if mapped_name and name.startswith(mapped_name):
+                    name = mapped_name
+
+            target_uin_text = (
+                str(target_uin)
+                if isinstance(target_uin, int) and target_uin
+                else str(pending_reply["uin"])
+                if pending_reply and pending_reply["uin"]
+                else None
+            )
+            target = {
+                "uid": target_uid or None,
+                "uin": target_uin_text,
+                "name": name,
+            }
+            mentions.append(target)
+            structured_elements.append({"type": "at", "data": target.copy()})
+            pending_reply = None
+    except (ProtobufDecodeError, TypeError, ValueError):
+        return empty
+
+    return {"mentions": mentions, "elements": structured_elements}
